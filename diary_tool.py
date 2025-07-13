@@ -106,16 +106,20 @@ class JoplinDiaryTool:
         # User input as last resort
         return input("Enter weather description (e.g., 'Mild, rainy. 11C'): ").strip()
     
-    def get_location(self) -> str:
-        """Get current location using CoreLocation or configured default"""
+    def get_location(self) -> tuple[str, str]:
+        """Get current location using CoreLocation or configured default
+        
+        Returns:
+            tuple: (location, source) where source is 'GPS', 'default', or 'override'
+        """
         
         # Method 1: Try Swift CoreLocation helper (GPS accurate)
         location = self._try_corelocation()
         if location:
-            return location
+            return location, "GPS"
         
         # Method 2: Fall back to configured default location
-        return self.default_location
+        return self.default_location, "default"
     
     def _try_corelocation(self) -> Optional[str]:
         """Try to get location using Cocoa app bundle"""
@@ -196,7 +200,12 @@ class JoplinDiaryTool:
         formatted_date = date.strftime("%Y/%m/%d")
         
         # Get automatic information
-        location = location_override if location_override else self.get_location()
+        if location_override:
+            location = location_override
+            location_source = "override"
+        else:
+            location, location_source = self.get_location()
+        
         weather = self.get_weather_info(location)
         
         # Build the diary entry body following 2025 format
@@ -230,7 +239,7 @@ class JoplinDiaryTool:
             print("DRY RUN - Would create entry:")
             print(f"Title: {title}")
             print(f"Body:\n{body}")
-            return {"id": "dry_run", "title": title, "body": body}
+            return {"id": "dry_run", "title": title, "body": body, "location_source": location_source}
         
         note_data = {
             "title": title,
@@ -238,7 +247,9 @@ class JoplinDiaryTool:
             "parent_id": self.diary_folder_id
         }
         
-        return self._make_request("POST", "/notes", note_data)
+        result = self._make_request("POST", "/notes", note_data)
+        result["location_source"] = location_source
+        return result
     
     def check_existing_entry(self, date: datetime.date) -> Optional[dict]:
         """Check if diary entry already exists for the given date"""
@@ -395,8 +406,15 @@ def main():
     
     # Show what location was detected
     if not args.dry_run:
-        detected_location = tool.get_location()
-        print(f"Detected location: {detected_location}")
+        if args.location:
+            print(f"Using location: {args.location} (manual override)")
+        else:
+            detected_location, location_source = tool.get_location()
+            source_description = {
+                "GPS": "GPS CoreLocation",
+                "default": "configured default"
+            }
+            print(f"Using location: {detected_location} ({source_description[location_source]})")
         print("Fetching weather...")
     
     # Get user content (skip for dry-run)
@@ -431,8 +449,29 @@ def main():
             print(f"\n✓ Diary entry created successfully!")
             print(f"Title: {target_date.strftime('%Y/%m/%d')}")
             print(f"Note ID: {result['id']}")
-            final_location = args.location if args.location else tool.get_location()
-            print(f"Location: {final_location}")
+            
+            # Show location source information
+            location_source = result.get("location_source", "unknown")
+            if args.location:
+                print(f"Location: {args.location} (manual override)")
+            else:
+                final_location, _ = tool.get_location()
+                source_description = {
+                    "GPS": "GPS CoreLocation",
+                    "default": "configured default"
+                }
+                print(f"Location: {final_location} ({source_description.get(location_source, location_source)})")
+        else:
+            # For dry-run, also show location source
+            location_source = result.get("location_source", "unknown")
+            if args.location:
+                print(f"Location source: manual override")
+            else:
+                source_description = {
+                    "GPS": "GPS CoreLocation", 
+                    "default": "configured default"
+                }
+                print(f"Location source: {source_description.get(location_source, location_source)}")
     except Exception as e:
         print(f"Error creating diary entry: {e}")
         sys.exit(1)
