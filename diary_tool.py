@@ -6,13 +6,37 @@ import datetime
 import sys
 import subprocess
 import argparse
+import os
 from typing import Optional
 
+def load_config():
+    """Load configuration from multiple sources with fallbacks"""
+    result = {}
+    
+    # Try to load from config.py
+    try:
+        import config
+        result['api_token'] = getattr(config, 'JOPLIN_API_TOKEN', None)
+        result['base_url'] = getattr(config, 'JOPLIN_API_BASE_URL', 'http://localhost:41184')
+        result['diary_folder_id'] = getattr(config, 'DIARY_FOLDER_ID', None)
+        result['default_location'] = getattr(config, 'DEFAULT_LOCATION', 'Garrynacurry')
+    except ImportError:
+        pass
+    
+    # Override with environment variables if present
+    result['api_token'] = os.getenv('JOPLIN_API_TOKEN', result.get('api_token'))
+    result['base_url'] = os.getenv('JOPLIN_API_BASE_URL', result.get('base_url', 'http://localhost:41184'))
+    result['diary_folder_id'] = os.getenv('JOPLIN_DIARY_FOLDER_ID', result.get('diary_folder_id'))
+    result['default_location'] = os.getenv('JOPLIN_DEFAULT_LOCATION', result.get('default_location', 'Garrynacurry'))
+    
+    return result
+
 class JoplinDiaryTool:
-    def __init__(self, api_token: str, base_url: str = "http://localhost:41184"):
+    def __init__(self, api_token: str, base_url: str = "http://localhost:41184", diary_folder_id: str = None, default_location: str = "Garrynacurry"):
         self.api_token = api_token
         self.base_url = base_url
-        self.diary_folder_id = "3e68a3e8d7564e78b761dfe5162d637c"
+        self.diary_folder_id = diary_folder_id or "3e68a3e8d7564e78b761dfe5162d637c"
+        self.default_location = default_location
     
     def _make_request(self, method: str, endpoint: str, data: Optional[dict] = None) -> dict:
         url = f"{self.base_url}{endpoint}"
@@ -83,7 +107,112 @@ class JoplinDiaryTool:
         return input("Enter weather description (e.g., 'Mild, rainy. 11C'): ").strip()
     
     def get_location(self) -> str:
-        """Get current location automatically with fallback"""
+        """Get current location using multiple detection methods"""
+        
+        # Method 1: Try Wi-Fi network name detection (best for travel)
+        location = self._try_wifi_location()
+        if location:
+            return location
+        
+        # Method 2: IP geolocation but prefer configured default for common ISP cities
+        ip_location = self._try_ip_location()
+        if ip_location:
+            # If IP location is a major city but we have a more specific default, use default
+            major_cities = ['Dublin', 'Cork', 'Galway', 'Limerick', 'Waterford']
+            if ip_location in major_cities and self.default_location not in major_cities:
+                # IP probably showing ISP location, use our configured default
+                return self.default_location
+            return ip_location
+        
+        # Final fallback to configured default location
+        return self.default_location
+    
+    def _try_macos_location(self) -> Optional[str]:
+        """Try to get location using built-in macOS tools"""
+        # For now, skip this method to avoid external dependencies
+        # Could potentially use system_profiler or other built-in tools
+        return None
+    
+    def _try_wifi_location(self) -> Optional[str]:
+        """Try to detect location from Wi-Fi network name using built-in tools"""
+        try:
+            if sys.platform == 'darwin':
+                # Method 1: Try using networksetup (built-in macOS tool)
+                result = subprocess.run(['networksetup', '-getairportnetwork', 'en0'], 
+                                      capture_output=True, text=True, timeout=5)
+                if result.returncode == 0 and 'Current Wi-Fi Network:' in result.stdout:
+                    ssid = result.stdout.split('Current Wi-Fi Network:')[1].strip()
+                    location = self._extract_location_from_ssid(ssid)
+                    if location:
+                        return location
+                
+                # Method 2: Try airport command as fallback
+                result = subprocess.run(['/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport', '-I'], 
+                                      capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    for line in result.stdout.split('\n'):
+                        if 'SSID:' in line:
+                            ssid = line.split('SSID:')[1].strip()
+                            location = self._extract_location_from_ssid(ssid)
+                            if location:
+                                return location
+                                
+        except Exception:
+            pass
+        
+        return None
+    
+    def _extract_location_from_ssid(self, ssid: str) -> Optional[str]:
+        """Extract location information from Wi-Fi network name"""
+        if not ssid or ssid == "":
+            return None
+            
+        # Common location patterns in SSIDs
+        location_patterns = [
+            # Specific to your area
+            'Garrynacurry', 'Nenagh', 'Tipperary', 'North Tipperary',
+            # Major Irish cities/towns
+            'Dublin', 'Cork', 'Galway', 'Limerick', 'Waterford', 'Kilkenny',
+            'Athlone', 'Sligo', 'Drogheda', 'Dundalk', 'Bray', 'Navan',
+            # Common business/location naming patterns
+            'Hotel', 'Cafe', 'Coffee', 'Restaurant', 'Pub', 'Library',
+            'Hospital', 'Airport', 'Station', 'Centre', 'Center'
+        ]
+        
+        ssid_lower = ssid.lower()
+        
+        # Look for exact location matches first
+        for pattern in location_patterns[:12]:  # Irish locations first
+            if pattern.lower() in ssid_lower:
+                return pattern
+                
+        # Look for business type patterns that might indicate location
+        for pattern in location_patterns[12:]:  # Business types
+            if pattern.lower() in ssid_lower:
+                # If we find a business pattern, try to extract location from context
+                words = ssid.split()
+                for word in words:
+                    if word.lower() != pattern.lower() and len(word) > 3:
+                        # Could be a location name
+                        if word.isalpha():  # Only alphabetic words
+                            return word.title()
+        
+        # Look for known network providers with location info
+        provider_patterns = {
+            'three': 'Ireland',
+            'vodafone': 'Ireland', 
+            'eir': 'Ireland',
+            'sky': 'Ireland'
+        }
+        
+        for provider, country in provider_patterns.items():
+            if provider in ssid_lower:
+                return self.default_location  # Return configured default for ISP networks
+        
+        return None
+    
+    def _try_ip_location(self) -> Optional[str]:
+        """Try IP-based geolocation (least accurate)"""
         try:
             # Try to get location via IP geolocation
             result = subprocess.run(['curl', '-s', 'ipinfo.io/city'], 
@@ -97,19 +226,7 @@ class JoplinDiaryTool:
         except Exception:
             pass
         
-        try:
-            # Fallback: try alternative geolocation service
-            result = subprocess.run(['curl', '-s', 'ipapi.co/city'], 
-                                  capture_output=True, text=True, timeout=5)
-            if result.returncode == 0 and result.stdout.strip():
-                city = result.stdout.strip()
-                if self._is_valid_location(city):
-                    return city
-        except Exception:
-            pass
-        
-        # Final fallback to known location
-        return "Garrynacurry"
+        return None
     
     def _is_valid_location(self, location: str) -> bool:
         """Validate location string"""
@@ -274,17 +391,57 @@ def run_integration_test(tool: JoplinDiaryTool):
     
     return True
 
-def main():
-    API_TOKEN = "f7e5f97b9c8a688ecbc3b07db67347acd3c39fa0941ee08ac5e4e7fa969a4b9811126ee17113cb8d702750a6038c4d23608fb25157df574dcc65930ab509b913"
+def setup_config():
+    """Interactive setup for configuration"""
+    print("=== Joplin Diary Tool Setup ===")
+    print()
     
+    config_file_exists = os.path.exists('config.py')
+    
+    if not config_file_exists:
+        print("Creating config.py from template...")
+        with open('config.py.example', 'r') as example:
+            content = example.read()
+        
+        with open('config.py', 'w') as config_file:
+            config_file.write(content)
+        
+        print("✓ Created config.py")
+    
+    print("\nPlease edit config.py and update the following:")
+    print("1. JOPLIN_API_TOKEN - Get from Joplin -> Tools -> Options -> Web Clipper")
+    print("2. DIARY_FOLDER_ID - Your diary notebook ID (current default should work)")
+    print("3. DEFAULT_LOCATION - Your preferred location fallback")
+    print()
+    print("Alternatively, you can set environment variables:")
+    print("  export JOPLIN_API_TOKEN='your_token_here'")
+    print("  export JOPLIN_DEFAULT_LOCATION='your_location'")
+    print()
+    print("Run the tool again after configuration is complete.")
+
+def main():
     parser = argparse.ArgumentParser(description="Create diary entries in Joplin")
     parser.add_argument("date", nargs="?", help="Date in YYYY-MM-DD format (default: today)")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be created without actually creating it")
     parser.add_argument("--test", action="store_true", help="Run integration test")
+    parser.add_argument("--setup", action="store_true", help="Help setup configuration")
     
     args = parser.parse_args()
     
-    tool = JoplinDiaryTool(API_TOKEN)
+    # Load configuration
+    config = load_config()
+    
+    # Check if setup is needed
+    if args.setup or not config.get('api_token'):
+        setup_config()
+        return
+    
+    tool = JoplinDiaryTool(
+        config['api_token'],
+        config['base_url'],
+        config['diary_folder_id'],
+        config['default_location']
+    )
     
     if args.test:
         run_integration_test(tool)

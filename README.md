@@ -52,13 +52,34 @@ Garrynacurry
 ## Automatic Information
 
 - **Date**: YYYY/MM/DD format in title and body
-- **Location**: Auto-detected via IP geolocation with fallback to "Garrynacurry"
+- **Location**: Multi-method detection with smart fallbacks
+  - Wi-Fi network analysis (best for travel - hotels, cafes, etc.)
+  - IP-based geolocation (fallback, less accurate) 
+  - Configured default location (most reliable for home/work)
 - **Weather**: Fetched from wttr.in using detected location with multiple fallbacks
 - **Day**: Day of week (Monday, Tuesday, etc.)
 
+## Configuration
+
+### Setup
+```bash
+# First time setup
+python3 diary_tool.py --setup
+
+# Or set environment variables
+export JOPLIN_API_TOKEN="your_token_here"
+export JOPLIN_DEFAULT_LOCATION="your_location"
+```
+
+### Location Detection
+The tool uses a smart fallback system:
+1. **Wi-Fi network names** - Detects location from hotel, cafe, library Wi-Fi names
+2. **IP geolocation** - Less accurate, often shows ISP city (Dublin instead of Garrynacurry)
+3. **Your configured default** - Most reliable for home/work location
+
 ## Error Handling
 
-- Location detection failure → falls back to "Garrynacurry"
+- Location detection failure → uses configured default location
 - Weather fetch failure → tries multiple services, then prompts for manual input
 - Network issues → graceful degradation with fallbacks
 - Format validation → prevents malformed entries

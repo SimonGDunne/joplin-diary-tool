@@ -1,0 +1,21 @@
+# Joplin API Configuration
+# Copy this file to config.py and update with your settings
+
+# Joplin API Token
+# Get this from Joplin -> Tools -> Options -> Web Clipper -> API token
+JOPLIN_API_TOKEN = "your_joplin_api_token_here"
+
+# Joplin API Base URL (usually localhost unless you've changed it)
+JOPLIN_API_BASE_URL = "http://localhost:41184"
+
+# Diary Folder ID (the tool will help you find this if needed)
+DIARY_FOLDER_ID = "your_diary_folder_id_here"
+
+# Default location (your primary/home location - used when automatic detection fails)
+# This should be your most common location (home/work)
+DEFAULT_LOCATION = "Garrynacurry"
+
+# Location detection method priority:
+# 1. Wi-Fi network name analysis (works best when traveling - hotels, cafes, etc.)
+# 2. IP-based geolocation (less accurate, often shows ISP location)
+# 3. DEFAULT_LOCATION as fallback (most reliable for home/work)
