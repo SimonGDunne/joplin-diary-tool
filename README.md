@@ -52,14 +52,15 @@ Garrynacurry
 ## Automatic Information
 
 - **Date**: YYYY/MM/DD format in title and body
-- **Weather**: Fetched from wttr.in with fallbacks
+- **Location**: Auto-detected via IP geolocation with fallback to "Garrynacurry"
+- **Weather**: Fetched from wttr.in using detected location with multiple fallbacks
 - **Day**: Day of week (Monday, Tuesday, etc.)
-- **Location**: Defaults to "Garrynacurry"
 
 ## Error Handling
 
-- Weather fetch failure → prompts for manual input
-- Network issues → graceful degradation
+- Location detection failure → falls back to "Garrynacurry"
+- Weather fetch failure → tries multiple services, then prompts for manual input
+- Network issues → graceful degradation with fallbacks
 - Format validation → prevents malformed entries
 - Existing entries → prompts before overwriting
 

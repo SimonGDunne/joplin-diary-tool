@@ -42,20 +42,23 @@ class JoplinDiaryTool:
         invalid_indicators = ["error", "unknown", "not found", "404"]
         return not any(indicator in weather_str.lower() for indicator in invalid_indicators)
     
-    def get_weather_info(self) -> str:
-        """Get current weather information with fallbacks"""
-        # Primary weather source
+    def get_weather_info(self, location: str = "") -> str:
+        """Get current weather information with fallbacks, optionally for specific location"""
+        # Prepare location parameter for weather services
+        location_param = f"/{location}" if location and location != "Garrynacurry" else ""
+        
+        # Primary weather source with location
         try:
-            result = subprocess.run(['curl', '-s', 'wttr.in/?format=%C+%t'], 
+            result = subprocess.run(['curl', '-s', f'wttr.in{location_param}?format=%C+%t'], 
                                   capture_output=True, text=True, timeout=10)
             if result.returncode == 0 and self._is_valid_weather(result.stdout.strip()):
                 return result.stdout.strip()
         except Exception:
             pass
         
-        # Fallback weather source
+        # Fallback weather source with location
         try:
-            result = subprocess.run(['curl', '-s', 'wttr.in/?format=3'], 
+            result = subprocess.run(['curl', '-s', f'wttr.in{location_param}?format=3'], 
                                   capture_output=True, text=True, timeout=5)
             if result.returncode == 0 and self._is_valid_weather(result.stdout.strip()):
                 weather_line = result.stdout.strip()
@@ -66,12 +69,54 @@ class JoplinDiaryTool:
         except Exception:
             pass
         
+        # Try without location if location-specific requests failed
+        if location_param:
+            try:
+                result = subprocess.run(['curl', '-s', 'wttr.in/?format=%C+%t'], 
+                                      capture_output=True, text=True, timeout=5)
+                if result.returncode == 0 and self._is_valid_weather(result.stdout.strip()):
+                    return result.stdout.strip()
+            except Exception:
+                pass
+        
         # User input as last resort
         return input("Enter weather description (e.g., 'Mild, rainy. 11C'): ").strip()
     
     def get_location(self) -> str:
-        """Get current location - defaults to Garrynacurry based on recent entries"""
+        """Get current location automatically with fallback"""
+        try:
+            # Try to get location via IP geolocation
+            result = subprocess.run(['curl', '-s', 'ipinfo.io/city'], 
+                                  capture_output=True, text=True, timeout=5)
+            if result.returncode == 0 and result.stdout.strip():
+                city = result.stdout.strip()
+                # Remove quotes if present
+                city = city.strip('"')
+                if self._is_valid_location(city):
+                    return city
+        except Exception:
+            pass
+        
+        try:
+            # Fallback: try alternative geolocation service
+            result = subprocess.run(['curl', '-s', 'ipapi.co/city'], 
+                                  capture_output=True, text=True, timeout=5)
+            if result.returncode == 0 and result.stdout.strip():
+                city = result.stdout.strip()
+                if self._is_valid_location(city):
+                    return city
+        except Exception:
+            pass
+        
+        # Final fallback to known location
         return "Garrynacurry"
+    
+    def _is_valid_location(self, location: str) -> bool:
+        """Validate location string"""
+        if not location or len(location) > 50:
+            return False
+        invalid_indicators = ["error", "unknown", "not found", "404", "null", "undefined"]
+        return not any(indicator in location.lower() for indicator in invalid_indicators)
     
     def validate_entry_format(self, body: str, date: datetime.date) -> bool:
         """Validate the diary entry format"""
@@ -111,8 +156,8 @@ class JoplinDiaryTool:
         formatted_date = date.strftime("%Y/%m/%d")
         
         # Get automatic information
-        weather = self.get_weather_info()
         location = self.get_location()
+        weather = self.get_weather_info(location)
         
         # Build the diary entry body following 2025 format
         body_parts = [
@@ -267,8 +312,11 @@ def main():
     print(f"Creating diary entry for {target_date.strftime('%A, %B %d, %Y')}")
     print("Gathering automatic information...")
     
-    # Get weather info first so user can see it
-    print("Fetching weather...")
+    # Show what location was detected
+    if not args.dry_run:
+        detected_location = tool.get_location()
+        print(f"Detected location: {detected_location}")
+        print("Fetching weather...")
     
     # Get user content (skip for dry-run)
     custom_content = ""
