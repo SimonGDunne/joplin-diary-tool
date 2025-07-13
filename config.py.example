@@ -16,6 +16,6 @@ DIARY_FOLDER_ID = "your_diary_folder_id_here"
 DEFAULT_LOCATION = "Garrynacurry"
 
 # Location detection method priority:
-# 1. Wi-Fi network name analysis (works best when traveling - hotels, cafes, etc.)
-# 2. IP-based geolocation (less accurate, often shows ISP location)
-# 3. DEFAULT_LOCATION as fallback (most reliable for home/work)
+# 1. GPS CoreLocation (most accurate, requires permission)
+# 2. DEFAULT_LOCATION as fallback (reliable for home/work)
+# 3. Manual override with --location flag (always takes priority)

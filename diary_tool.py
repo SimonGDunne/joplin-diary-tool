@@ -107,29 +107,14 @@ class JoplinDiaryTool:
         return input("Enter weather description (e.g., 'Mild, rainy. 11C'): ").strip()
     
     def get_location(self) -> str:
-        """Get current location using multiple detection methods"""
+        """Get current location using CoreLocation or configured default"""
         
-        # Method 1: Try Swift CoreLocation helper (most accurate)
+        # Method 1: Try Swift CoreLocation helper (GPS accurate)
         location = self._try_corelocation()
         if location:
             return location
         
-        # Method 2: Try Wi-Fi network name detection (best for travel)
-        location = self._try_wifi_location()
-        if location:
-            return location
-        
-        # Method 3: IP geolocation but prefer configured default for common ISP cities
-        ip_location = self._try_ip_location()
-        if ip_location:
-            # If IP location is a major city but we have a more specific default, use default
-            major_cities = ['Dublin', 'Cork', 'Galway', 'Limerick', 'Waterford']
-            if ip_location in major_cities and self.default_location not in major_cities:
-                # IP probably showing ISP location, use our configured default
-                return self.default_location
-            return ip_location
-        
-        # Final fallback to configured default location
+        # Method 2: Fall back to configured default location
         return self.default_location
     
     def _try_corelocation(self) -> Optional[str]:
@@ -165,106 +150,6 @@ class JoplinDiaryTool:
         
         return None
     
-    def _try_macos_location(self) -> Optional[str]:
-        """Try to get location using built-in macOS tools"""
-        # For now, skip this method to avoid external dependencies
-        # Could potentially use system_profiler or other built-in tools
-        return None
-    
-    def _try_wifi_location(self) -> Optional[str]:
-        """Try to detect location from Wi-Fi network name using built-in tools"""
-        try:
-            if sys.platform == 'darwin':
-                # Method 1: Try using networksetup (built-in macOS tool)
-                result = subprocess.run(['networksetup', '-getairportnetwork', 'en0'], 
-                                      capture_output=True, text=True, timeout=5)
-                if result.returncode == 0 and 'Current Wi-Fi Network:' in result.stdout:
-                    ssid = result.stdout.split('Current Wi-Fi Network:')[1].strip()
-                    location = self._extract_location_from_ssid(ssid)
-                    if location:
-                        return location
-                
-                # Method 2: Try airport command as fallback
-                result = subprocess.run(['/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport', '-I'], 
-                                      capture_output=True, text=True, timeout=5)
-                if result.returncode == 0:
-                    for line in result.stdout.split('\n'):
-                        if 'SSID:' in line:
-                            ssid = line.split('SSID:')[1].strip()
-                            location = self._extract_location_from_ssid(ssid)
-                            if location:
-                                return location
-                                
-        except Exception:
-            pass
-        
-        return None
-    
-    def _extract_location_from_ssid(self, ssid: str) -> Optional[str]:
-        """Extract location information from Wi-Fi network name"""
-        if not ssid or ssid == "":
-            return None
-            
-        # Common location patterns in SSIDs
-        location_patterns = [
-            # Specific to your area
-            'Garrynacurry', 'Nenagh', 'Tipperary', 'North Tipperary',
-            # Major Irish cities/towns
-            'Dublin', 'Cork', 'Galway', 'Limerick', 'Waterford', 'Kilkenny',
-            'Athlone', 'Sligo', 'Drogheda', 'Dundalk', 'Bray', 'Navan',
-            # Common business/location naming patterns
-            'Hotel', 'Cafe', 'Coffee', 'Restaurant', 'Pub', 'Library',
-            'Hospital', 'Airport', 'Station', 'Centre', 'Center'
-        ]
-        
-        ssid_lower = ssid.lower()
-        
-        # Look for exact location matches first
-        for pattern in location_patterns[:12]:  # Irish locations first
-            if pattern.lower() in ssid_lower:
-                return pattern
-                
-        # Look for business type patterns that might indicate location
-        for pattern in location_patterns[12:]:  # Business types
-            if pattern.lower() in ssid_lower:
-                # If we find a business pattern, try to extract location from context
-                words = ssid.split()
-                for word in words:
-                    if word.lower() != pattern.lower() and len(word) > 3:
-                        # Could be a location name
-                        if word.isalpha():  # Only alphabetic words
-                            return word.title()
-        
-        # Look for known network providers with location info
-        provider_patterns = {
-            'three': 'Ireland',
-            'vodafone': 'Ireland', 
-            'eir': 'Ireland',
-            'sky': 'Ireland'
-        }
-        
-        for provider, country in provider_patterns.items():
-            if provider in ssid_lower:
-                return self.default_location  # Return configured default for ISP networks
-        
-        return None
-    
-    def _try_ip_location(self) -> Optional[str]:
-        """Try IP-based geolocation (least accurate)"""
-        try:
-            # Try to get location via IP geolocation
-            result = subprocess.run(['curl', '-s', 'ipinfo.io/city'], 
-                                  capture_output=True, text=True, timeout=5)
-            if result.returncode == 0 and result.stdout.strip():
-                city = result.stdout.strip()
-                # Remove quotes if present
-                city = city.strip('"')
-                if self._is_valid_location(city):
-                    return city
-        except Exception:
-            pass
-        
-        return None
     
     def _is_valid_location(self, location: str) -> bool:
         """Validate location string"""

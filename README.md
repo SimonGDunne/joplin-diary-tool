@@ -72,11 +72,9 @@ export JOPLIN_DEFAULT_LOCATION="your_location"
 ```
 
 ### Location Detection
-The tool uses a smart fallback system for maximum accuracy:
+The tool uses a simple, reliable two-tier system:
 1. **macOS CoreLocation** - GPS-accurate location using built-in location services (requires one-time permission)
-2. **Wi-Fi network names** - Detects location from hotel, cafe, library Wi-Fi names when traveling
-3. **IP geolocation** - Less accurate, often shows ISP city (Dublin instead of Garrynacurry)  
-4. **Your configured default** - Most reliable fallback for home/work location
+2. **Your configured default** - Reliable fallback for home/work location (Garrynacurry)
 
 ### Setup Location Services
 ```bash
@@ -96,6 +94,19 @@ python3 diary_tool.py --dry-run
 python3 diary_tool.py --location "Nenagh"
 python3 diary_tool.py --dry-run --location "Dublin"
 ```
+
+## Location Behavior
+
+**Automatic Detection:**
+- ✅ **GPS available + permission granted** → Shows actual GPS location
+- ✅ **GPS unavailable/denied** → Uses configured default (Garrynacurry)
+- ✅ **Manual override** → `--location "Location"` always takes priority
+
+**Benefits of Simplified System:**
+- More predictable and reliable
+- No confusing IP geolocation showing wrong cities
+- Clear fallback behavior
+- Manual control when needed
 
 ## Error Handling
 
