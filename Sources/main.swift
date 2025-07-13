@@ -1,23 +1,51 @@
-#!/usr/bin/env swift
-
 import Foundation
 import CoreLocation
+import Cocoa
 
-class LocationManager: NSObject, CLLocationManagerDelegate {
+@main
+class LocationApp: NSObject, NSApplicationDelegate, CLLocationManagerDelegate {
     private let locationManager = CLLocationManager()
-    private let geocoder = CLGeocoder()
+    private let app = NSApplication.shared
     private var completion: ((String?) -> Void)?
     
     override init() {
         super.init()
+        app.delegate = self
         locationManager.delegate = self
-        locationManager.desiredAccuracy = kCLLocationAccuracyKilometer // Lower accuracy for privacy/battery
+        locationManager.desiredAccuracy = kCLLocationAccuracyKilometer
+    }
+    
+    static func main() {
+        let app = LocationApp()
+        app.run()
+    }
+    
+    func run() {
+        // Set up the app to run headless
+        app.setActivationPolicy(.prohibited) // Don't show in dock
+        
+        getCurrentLocation { [weak self] result in
+            if let location = result {
+                print(location)
+                exit(0)
+            } else {
+                fputs("Unable to determine location\n", stderr)
+                exit(1)
+            }
+        }
+        
+        // Run the app with a timeout
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15) {
+            fputs("Location request timed out\n", stderr)
+            exit(1)
+        }
+        
+        app.run()
     }
     
     func getCurrentLocation(completion: @escaping (String?) -> Void) {
         self.completion = completion
         
-        // Check authorization status
         let authStatus = locationManager.authorizationStatus
         
         switch authStatus {
@@ -56,9 +84,10 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
         }
         
         // Reverse geocode to get human-readable location
+        let geocoder = CLGeocoder()
         geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, error in
             if let error = error {
-                // If reverse geocoding fails, fall back to coordinates
+                // If reverse geocoding fails, provide coordinates
                 let lat = String(format: "%.4f", location.coordinate.latitude)
                 let lng = String(format: "%.4f", location.coordinate.longitude)
                 self?.completion?("Coordinates: \(lat), \(lng)")
@@ -70,7 +99,7 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
                 return
             }
             
-            // Try to build a meaningful location string
+            // Build location string
             var locationComponents: [String] = []
             
             // Add locality (town/city) - most important
@@ -96,53 +125,10 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         completion?(nil)
     }
-}
-
-// Main execution
-let locationManager = LocationManager()
-let semaphore = DispatchSemaphore(value: 0)
-var result: String?
-
-locationManager.getCurrentLocation { location in
-    result = location
-    semaphore.signal()
-}
-
-// Wait for location with timeout
-let timeoutResult = semaphore.wait(timeout: .now() + 10)
-
-if timeoutResult == .timedOut {
-    print("Location request timed out", to: &standardError)
-    exit(1)
-}
-
-if let location = result {
-    print(location)
-    exit(0)
-} else {
-    // Check authorization status for better error message
-    let authStatus = CLLocationManager().authorizationStatus
-    switch authStatus {
-    case .notDetermined:
-        print("Location permission not requested yet", to: &standardError)
-    case .denied:
-        print("Location permission denied", to: &standardError)
-    case .restricted:
-        print("Location access restricted", to: &standardError)
-    case .authorizedWhenInUse, .authorizedAlways:
-        print("Location permission granted but unable to get location", to: &standardError)
-    @unknown default:
-        print("Unknown location authorization status", to: &standardError)
-    }
-    exit(1)
-}
-
-// Helper for stderr output
-var standardError = FileHandle.standardError
-
-extension FileHandle: TextOutputStream {
-    public func write(_ string: String) {
-        let data = Data(string.utf8)
-        self.write(data)
+    
+    // MARK: - NSApplicationDelegate
+    
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // App is ready
     }
 }

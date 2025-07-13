@@ -80,11 +80,21 @@ The tool uses a smart fallback system for maximum accuracy:
 
 ### Setup Location Services
 ```bash
-# Build the Swift location helper (one time)
-./build_location_helper.sh
+# Build the location app (one time)
+./build_location_app.sh
 
-# First run will prompt for location permission
+# Grant location permission (see setup_location_permissions.md)
+open JoplinLocationHelper.app  # Triggers permission dialog
+
+# Test location detection
 python3 diary_tool.py --dry-run
+```
+
+### Manual Location Override
+```bash
+# Override automatic detection
+python3 diary_tool.py --location "Nenagh"
+python3 diary_tool.py --dry-run --location "Dublin"
 ```
 
 ## Error Handling

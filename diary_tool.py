@@ -133,21 +133,22 @@ class JoplinDiaryTool:
         return self.default_location
     
     def _try_corelocation(self) -> Optional[str]:
-        """Try to get location using Swift CoreLocation helper"""
+        """Try to get location using Cocoa app bundle"""
         try:
             # Check if on macOS
             if sys.platform != 'darwin':
                 return None
             
-            # Check if Swift helper exists
+            # Check if app bundle exists
             script_dir = os.path.dirname(os.path.abspath(__file__))
-            helper_path = os.path.join(script_dir, 'get_location')
+            app_path = os.path.join(script_dir, 'JoplinLocationHelper.app')
+            executable_path = os.path.join(app_path, 'Contents', 'MacOS', 'JoplinLocationHelper')
             
-            if not os.path.exists(helper_path):
+            if not os.path.exists(executable_path):
                 return None
             
-            # Run Swift helper with timeout
-            result = subprocess.run([helper_path], 
+            # Run the app executable with timeout
+            result = subprocess.run([executable_path], 
                                   capture_output=True, text=True, timeout=15)
             
             if result.returncode == 0 and result.stdout.strip():
@@ -303,14 +304,14 @@ class JoplinDiaryTool:
         
         return True
     
-    def create_diary_entry(self, date: datetime.date, additional_content: str = "", dry_run: bool = False) -> dict:
+    def create_diary_entry(self, date: datetime.date, additional_content: str = "", dry_run: bool = False, location_override: str = None) -> dict:
         """Create a diary entry with automatic information and user content"""
         title = date.strftime("%Y/%m/%d")
         day_name = date.strftime("%A")
         formatted_date = date.strftime("%Y/%m/%d")
         
         # Get automatic information
-        location = self.get_location()
+        location = location_override if location_override else self.get_location()
         weather = self.get_weather_info(location)
         
         # Build the diary entry body following 2025 format
@@ -462,6 +463,7 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Show what would be created without actually creating it")
     parser.add_argument("--test", action="store_true", help="Run integration test")
     parser.add_argument("--setup", action="store_true", help="Help setup configuration")
+    parser.add_argument("--location", type=str, help="Override location detection with specific location")
     
     args = parser.parse_args()
     
@@ -539,12 +541,13 @@ def main():
         custom_content = '\n'.join(content_lines[:-2]) if len(content_lines) > 2 else ""
     
     try:
-        result = tool.create_diary_entry(target_date, custom_content, dry_run=args.dry_run)
+        result = tool.create_diary_entry(target_date, custom_content, dry_run=args.dry_run, location_override=args.location)
         if not args.dry_run:
             print(f"\n✓ Diary entry created successfully!")
             print(f"Title: {target_date.strftime('%Y/%m/%d')}")
             print(f"Note ID: {result['id']}")
-            print(f"Location: {tool.get_location()}")
+            final_location = args.location if args.location else tool.get_location()
+            print(f"Location: {final_location}")
     except Exception as e:
         print(f"Error creating diary entry: {e}")
         sys.exit(1)

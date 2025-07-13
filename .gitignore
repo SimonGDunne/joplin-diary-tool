@@ -39,5 +39,7 @@ Thumbs.db
 config.py
 *.env
 
-# Compiled Swift binary
+# Compiled Swift binary and app bundle
 get_location
+JoplinLocationHelper.app/
+.build/
