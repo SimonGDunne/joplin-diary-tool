@@ -4,8 +4,11 @@ A Python tool to automatically create diary entries in your local Joplin install
 
 ## Features
 
-- **Automatic Information**: Fetches weather and date information automatically
+- **Automatic Information**: Fetches date, location, weather, and day automatically
+- **GPS Location Detection**: Uses macOS CoreLocation for accurate positioning
+- **Manual Location Override**: `--location` flag for travel or specific locations
 - **Consistent Format**: Matches your existing diary entry format (2025 style)
+- **Secure Configuration**: API tokens stored in config files, not code
 - **Safe Testing**: Dry-run mode and comprehensive testing
 - **Error Handling**: Graceful fallbacks for weather and network issues
 - **Validation**: Built-in format validation
@@ -52,10 +55,9 @@ Garrynacurry
 ## Automatic Information
 
 - **Date**: YYYY/MM/DD format in title and body
-- **Location**: Multi-method detection with smart fallbacks
-  - Wi-Fi network analysis (best for travel - hotels, cafes, etc.)
-  - IP-based geolocation (fallback, less accurate) 
-  - Configured default location (most reliable for home/work)
+- **Location**: Simple, reliable two-tier system
+  - GPS CoreLocation (accurate, requires permission)
+  - Configured default location (reliable fallback)
 - **Weather**: Fetched from wttr.in using detected location with multiple fallbacks
 - **Day**: Day of week (Monday, Tuesday, etc.)
 
