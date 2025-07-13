@@ -38,3 +38,6 @@ Thumbs.db
 # Config files with sensitive data
 config.py
 *.env
+
+# Compiled Swift binary
+get_location

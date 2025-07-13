@@ -72,10 +72,20 @@ export JOPLIN_DEFAULT_LOCATION="your_location"
 ```
 
 ### Location Detection
-The tool uses a smart fallback system:
-1. **Wi-Fi network names** - Detects location from hotel, cafe, library Wi-Fi names
-2. **IP geolocation** - Less accurate, often shows ISP city (Dublin instead of Garrynacurry)
-3. **Your configured default** - Most reliable for home/work location
+The tool uses a smart fallback system for maximum accuracy:
+1. **macOS CoreLocation** - GPS-accurate location using built-in location services (requires one-time permission)
+2. **Wi-Fi network names** - Detects location from hotel, cafe, library Wi-Fi names when traveling
+3. **IP geolocation** - Less accurate, often shows ISP city (Dublin instead of Garrynacurry)  
+4. **Your configured default** - Most reliable fallback for home/work location
+
+### Setup Location Services
+```bash
+# Build the Swift location helper (one time)
+./build_location_helper.sh
+
+# First run will prompt for location permission
+python3 diary_tool.py --dry-run
+```
 
 ## Error Handling
 

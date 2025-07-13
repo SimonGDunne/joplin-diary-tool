@@ -109,12 +109,17 @@ class JoplinDiaryTool:
     def get_location(self) -> str:
         """Get current location using multiple detection methods"""
         
-        # Method 1: Try Wi-Fi network name detection (best for travel)
+        # Method 1: Try Swift CoreLocation helper (most accurate)
+        location = self._try_corelocation()
+        if location:
+            return location
+        
+        # Method 2: Try Wi-Fi network name detection (best for travel)
         location = self._try_wifi_location()
         if location:
             return location
         
-        # Method 2: IP geolocation but prefer configured default for common ISP cities
+        # Method 3: IP geolocation but prefer configured default for common ISP cities
         ip_location = self._try_ip_location()
         if ip_location:
             # If IP location is a major city but we have a more specific default, use default
@@ -126,6 +131,38 @@ class JoplinDiaryTool:
         
         # Final fallback to configured default location
         return self.default_location
+    
+    def _try_corelocation(self) -> Optional[str]:
+        """Try to get location using Swift CoreLocation helper"""
+        try:
+            # Check if on macOS
+            if sys.platform != 'darwin':
+                return None
+            
+            # Check if Swift helper exists
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            helper_path = os.path.join(script_dir, 'get_location')
+            
+            if not os.path.exists(helper_path):
+                return None
+            
+            # Run Swift helper with timeout
+            result = subprocess.run([helper_path], 
+                                  capture_output=True, text=True, timeout=15)
+            
+            if result.returncode == 0 and result.stdout.strip():
+                location = result.stdout.strip()
+                if self._is_valid_location(location):
+                    return location
+                    
+        except subprocess.TimeoutExpired:
+            # Location request timed out
+            pass
+        except Exception:
+            # Any other error (permissions denied, etc.)
+            pass
+        
+        return None
     
     def _try_macos_location(self) -> Optional[str]:
         """Try to get location using built-in macOS tools"""
